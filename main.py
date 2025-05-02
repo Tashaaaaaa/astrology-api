@@ -15,7 +15,10 @@ def natal_analysis(
     tz: str = Query(...)
 ):
     try:
-        dt = Datetime(date, time, tz)
+        # Преобразуем дату из "YYYY-MM-DD" в "DD/MM/YYYY"
+        year, month, day = date.split('-')
+        converted_date = f"{day}/{month}/{year}"
+        dt = Datetime(converted_date, time, tz)
         pos = GeoPos(str(lat), str(lon))
         chart = Chart(dt, pos)
 
@@ -27,4 +30,9 @@ def natal_analysis(
             "sun_sign": sun.sign,
             "moon_sign": moon.sign,
             "ascendant": asc.sign,
-            "interpretation": f"Солнце в {sun.sign}, Луна в {moon.sign}, Асцендент в {
+            "interpretation": f"Солнце в {sun.sign}, Луна в {moon.sign}, Асцендент в {asc.sign}"
+        }
+
+    except Exception as e:
+        logging.exception("Ошибка при расчёте:")
+        return {"error": str(e)}
