@@ -15,13 +15,11 @@ def natal_analysis(
     tz: str = Query(...)
 ):
     try:
-        # Преобразуем дату из YYYY-MM-DD в DD/MM/YYYY
         year, month, day = date.split('-')
         converted_date = f"{day}/{month}/{year}"
 
-        # Форматируем координаты
-        pos = GeoPos(f"{lat:.4f}", f"{lon:.4f}")
         dt = Datetime(converted_date, time, tz)
+        pos = GeoPos(lat, lon)
         chart = Chart(dt, pos)
 
         sun = chart.get('SUN')
