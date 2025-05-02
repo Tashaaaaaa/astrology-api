@@ -3,10 +3,14 @@ from flatlib.chart import Chart
 from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 from flatlib.ephem import swe
+from flatlib import ephem
 import logging
 
 # Инициализация эфемерид
-swe.set_ephe_path('.')
+swe.set_ephe_path('./ephe')
+ephem.use(swe)  # <--- вот это ключевое!
+
+
 
 app = FastAPI()
 
