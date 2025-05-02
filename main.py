@@ -2,7 +2,11 @@ from fastapi import FastAPI, Query
 from flatlib.chart import Chart
 from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
+from flatlib.ephem import swe
 import logging
+
+# Инициализация эфемерид
+swe.set_ephe_path('.')
 
 app = FastAPI()
 
@@ -20,7 +24,7 @@ def natal_analysis(
 
         dt = Datetime(converted_date, time, tz)
         pos = GeoPos(lat, lon)
-        chart = Chart(dt, pos, hsys='P')  # <-- добавлено
+        chart = Chart(dt, pos, hsys='P')
 
         sun = chart.get('SUN')
         moon = chart.get('MOON')
