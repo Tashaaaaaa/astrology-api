@@ -20,7 +20,7 @@ def natal_analysis(
 
         dt = Datetime(converted_date, time, tz)
         pos = GeoPos(lat, lon)
-        chart = Chart(dt, pos)
+        chart = Chart(dt, pos, hsys='P')  # <-- добавлено
 
         sun = chart.get('SUN')
         moon = chart.get('MOON')
