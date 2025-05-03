@@ -3,5 +3,5 @@ uvicorn
 flatlib
 swisseph
 openai
-python-telegram-bot
+python-telegram-bot==13.14
 requests
