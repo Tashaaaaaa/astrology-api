@@ -112,7 +112,8 @@ def format_handler(update: Update, context: CallbackContext):
         }
     ) or {}
     if 'error' in resp:
-        return update.message.reply_text(f"Ошибка расчёта: {resp['error']}")
+        update.message.reply_text(f"Ошибка расчёта: {resp['error']}")
+        return ConversationHandler.END(f"Ошибка расчёта: {resp['error']}")
     sun, moon, asc = resp['sun_sign'], resp['moon_sign'], resp['ascendant_sign']
     if choice=='короткую':
         text = f"{data['place']}: ☀️ {sun}, 🌙 {moon}, ASC {asc}."
