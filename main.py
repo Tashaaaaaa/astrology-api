@@ -212,8 +212,7 @@ def cancel_handler(update: Update, context: CallbackContext):
 
 # Регистрация ConversationHandler
 conv = ConversationHandler(
-    allow_reentry=False,
-    conversation_timer=None  # Не перезапускать конверсацию автоматически
+    entry_points=[CommandHandler('start', start_handler)],
     states={
         DATE:        [MessageHandler(Filters.text & ~Filters.command, date_handler)],
         TIME_PERIOD: [MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
@@ -223,7 +222,7 @@ conv = ConversationHandler(
     fallbacks=[CommandHandler('cancel', cancel_handler)],
     allow_reentry=False
 )
-dp.add_handler(conv)
+dp.add_handler(conv)(conv)
 
 # Webhook endpoint для Telegram
 @app.post('/webhook')
