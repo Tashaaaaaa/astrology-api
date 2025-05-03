@@ -1,4 +1,7 @@
 fastapi
 uvicorn
 flatlib
-pyswisseph
+swisseph
+openai
+python-telegram-bot
+

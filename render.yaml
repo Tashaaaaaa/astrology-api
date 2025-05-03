@@ -1,48 +1,8 @@
-Last login: Fri May  2 18:21:24 on ttys000
-belaevanatala@MacBook-Pro--NBelyaeva ~ % nano render.yaml
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  UW PICO 5.09                   File: render.yaml                    Modified  
-
 services:
   - type: web
     name: astrology-api
-    env: python
-    buildCommand: ""
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    env: docker
     plan: free
-    envVars:
-      - key: PORT
-        value: 10000
-
-
-
-
-
-
-
-
-
-
-^G Get Help  ^O WriteOut  ^R Read File ^Y Prev Pg   ^K Cut Text  ^C Cur Pos   
-^X Exit      ^J Justify   ^W Where is  ^V Next Pg   ^U UnCut Text^T To Spell  
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
