@@ -5,3 +5,5 @@ swisseph
 openai
 python-telegram-bot==13.14
 requests
+python-dateutil
+

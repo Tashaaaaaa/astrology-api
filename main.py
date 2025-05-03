@@ -14,6 +14,7 @@ from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 import swisseph
 import openai
+from dateutil.parser import parse as parse_date  # Новый импорт для гибкого парсинга дат
 
 # ─── Настройка ────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -37,7 +38,7 @@ DATE, TIME_PERIOD, PLACE, FORMAT = range(4)
 
 # ─── Создаём Telegram Bot и Dispatcher ────────────────────────────────────────
 bot = Bot(token=TELEGRAM_TOKEN)
-dp = Dispatcher(bot, None, workers=1, use_context=True)  # Установили хотя бы 1 рабочий поток для асинхронных колбеков
+dp = Dispatcher(bot, None, workers=0, use_context=True)  # Синхронный режим без потоков, чтобы избежать дублирования обработок  # Установили хотя бы 1 рабочий поток для асинхронных колбеков
 
 # ─── REST API для натальной карты и ChatGPT ────────────────────────────────────
 @app.get("/natal")
@@ -78,12 +79,18 @@ def start_handler(update: Update, context: CallbackContext):
 
 def date_handler(update: Update, context: CallbackContext):
     text = update.message.text.strip()
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
-        update.message.reply_text("Неверный формат даты. Попробуйте: ГГГГ-ММ-ДД")
+    try:
+        # Парсим любую дату
+        dt_obj = parse_date(text, dayfirst=False)
+        date_iso = dt_obj.strftime('%Y-%m-%d')
+    except Exception:
+        update.message.reply_text(
+            "Не удалось распознать дату. Введите дату рождения любым понятным форматом, например '3 мая 1990' или '1990-05-03'."
+        )
         return DATE
-    context.user_data['date'] = text
+    context.user_data['date'] = date_iso
     update.message.reply_text(
-        "Когда ты родился? Выбери: 'ночью', 'утром', 'днем' или 'вечером'"
+        "Отлично! Теперь выберите, когда вы родились: 'ночью', 'утром', 'днем' или 'вечером'."
     )
     return TIME_PERIOD
 
