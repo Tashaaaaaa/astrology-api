@@ -31,7 +31,7 @@ openai.api_key = OPENAI_API_KEY
 swisseph.set_ephe_path('./ephe')
 
 # ─── Состояния для ConversationHandler ───────────────────────────────────────
-DATE_TIME, COORDINATES, PLACE, FORMAT = range(4)
+DATE, TIME_PERIOD, COORDINATES, PLACE, FORMAT = range(5)
 
 # ─── REST API ─────────────────────────────────────────────────────────────────
 @app.get("/natal")
@@ -47,11 +47,7 @@ def natal_analysis(
         sun = chart.get(const.SUN)
         moon = chart.get(const.MOON)
         asc = chart.get(const.ASC)
-        return {
-            "sun_sign": sun.sign,
-            "moon_sign": moon.sign,
-            "ascendant_sign": asc.sign,
-        }
+        return {"sun_sign": sun.sign, "moon_sign": moon.sign, "ascendant_sign": asc.sign}
     except Exception as e:
         logging.exception("Ошибка в /natal:")
         return {"error": str(e)}
@@ -75,21 +71,33 @@ async def chat_gpt(payload: dict = Body(...)):
 def start_handler(update: Update, context: CallbackContext):
     update.message.reply_text(
         "👋 Привет! Давай создадим твою натальную карту.\n"
-        "Введите дату и время рождения в формате ГГГГ-ММ-ДД ЧЧ:ММ (например: 1990-05-03 14:30):"
+        "Введите дату рождения в формате ГГГГ-ММ-ДД (например: 1990-05-03):"
     )
-    return DATE_TIME
+    return DATE
 
 
-def date_time_handler(update: Update, context: CallbackContext):
+def date_handler(update: Update, context: CallbackContext):
     text = update.message.text.strip()
-    if not re.match(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$", text):
-        update.message.reply_text("Неверный формат. Повторите: ГГГГ-ММ-ДД ЧЧ:ММ")
-        return DATE_TIME
-    date, time = text.split()
-    context.user_data['date'] = date
-    context.user_data['time'] = time
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
+        update.message.reply_text("Неверный формат даты. Повторите: ГГГГ-ММ-ДД")
+        return DATE
+    context.user_data['date'] = text
     update.message.reply_text(
-        "Отлично! Теперь укажи координаты места рождения: широта и долгота через запятую"
+        "Отлично! Теперь укажи, когда ты родился: 'ночью', 'утром', 'днем' или 'вечером'."
+    )
+    return TIME_PERIOD
+
+
+def time_period_handler(update: Update, context: CallbackContext):
+    choice = update.message.text.strip().lower()
+    mapping = {'ночью': '00:00', 'утром': '08:00', 'днем': '13:00', 'вечером': '18:00'}
+    if choice not in mapping:
+        update.message.reply_text("Выбери один из вариантов: 'ночью', 'утром', 'днем' или 'вечером'.")
+        return TIME_PERIOD
+    # фиксированное время для расчётов
+    context.user_data['time'] = mapping[choice]
+    update.message.reply_text(
+        "Хорошо! Теперь укажи координаты места рождения: широта и долгота через запятую"
         " (например: 55.75,37.62):"
     )
     return COORDINATES
@@ -99,24 +107,19 @@ def coordinates_handler(update: Update, context: CallbackContext):
     text = update.message.text.strip()
     parts = [p.strip() for p in text.split(',')]
     try:
-        lat = float(parts[0])
-        lon = float(parts[1])
+        context.user_data['lat'] = float(parts[0])
+        context.user_data['lon'] = float(parts[1])
     except:
         update.message.reply_text("Не смог разобрать координаты. Введите как: 55.75,37.62")
         return COORDINATES
-    context.user_data['lat'] = lat
-    context.user_data['lon'] = lon
-    update.message.reply_text(
-        "Отлично! Теперь введите название места рождения (город или точку на карте):"
-    )
+    update.message.reply_text("Отлично! Теперь введите название места рождения (например: Москва):")
     return PLACE
 
 
 def place_handler(update: Update, context: CallbackContext):
     context.user_data['place'] = update.message.text.strip()
     update.message.reply_text(
-        "Хорошо. Какую интерпретацию ты хочешь?\n"
-        "Напиши 'короткую' или 'красочную':"
+        "Какую интерпретацию ты хочешь? Напиши 'короткую' или 'красочную':"
     )
     return FORMAT
 
@@ -146,7 +149,7 @@ def format_handler(update: Update, context: CallbackContext):
             text = f"{place}: Солнце в {sun}, Луна в {moon}, Асцендент в {asc}."
         else:
             prompt = (
-                f"Опиши натальную карту для человека, родившегося в {place}, "
+                f"Опиши натальную карту для человека, родившегося в {place} ({data['date']} {data['time']}), "
                 f"Солнце в {sun}, Луна в {moon}, Асцендент в {asc}. "
                 "Пиши развернуто и вдохновенно."
             )
@@ -172,7 +175,8 @@ def on_startup():
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start_handler)],
         states={
-            DATE_TIME:    [MessageHandler(Filters.text & ~Filters.command, date_time_handler)],
+            DATE:         [MessageHandler(Filters.text & ~Filters.command, date_handler)],
+            TIME_PERIOD:  [MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
             COORDINATES:  [MessageHandler(Filters.text & ~Filters.command, coordinates_handler)],
             PLACE:        [MessageHandler(Filters.text & ~Filters.command, place_handler)],
             FORMAT:       [MessageHandler(Filters.text & ~Filters.command, format_handler)],
