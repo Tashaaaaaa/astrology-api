@@ -155,18 +155,19 @@ def cancel_handler(update: Update, context: CallbackContext):
 
 # Регистрируем ConversationHandler
 # Запуск разговора по любому текстовому сообщению (не требует /start)
+# Conversation Handler: запускаем на любое текстовое сообщение (без явной команды)
 conv = ConversationHandler(
     entry_points=[MessageHandler(Filters.text & ~Filters.command, start_handler)],
     states={
         DATE:        [MessageHandler(Filters.text & ~Filters.command, date_handler)],
-        TIME_PERIOD:[MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
+        TIME_PERIOD: [MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
         PLACE:       [MessageHandler(Filters.text & ~Filters.command, place_handler)],
         FORMAT:      [MessageHandler(Filters.text & ~Filters.command, format_handler)],
     },
-    fallbacks=[CommandHandler('cancel', cancel_handler)]
+    fallbacks=[CommandHandler('cancel', cancel_handler)],
+    allow_reentry=False
 )
-# Убираем CommandHandler('start') — любой текст запускает Conversation
-# Добавляем ConversationHandler на Dispatcher
+# Регистрируем ConversationHandler
 
 dp.add_handler(conv)
 
