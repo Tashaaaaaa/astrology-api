@@ -14,7 +14,7 @@ from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 import swisseph
 import openai
-from dateutil.parser import parse as parse_date  # Новый импорт для гибкого парсинга дат
+import dateparser  # Для гибкого парсинга дат на разных языках
 
 # ─── Настройка ────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -79,15 +79,19 @@ def start_handler(update: Update, context: CallbackContext):
 
 def date_handler(update: Update, context: CallbackContext):
     text = update.message.text.strip()
-    try:
-        # Парсим любую дату
-        dt_obj = parse_date(text, dayfirst=False)
-        date_iso = dt_obj.strftime('%Y-%m-%d')
-    except Exception:
+    # Парсим дату с поддержкой русского и английского
+    dt_obj = dateparser.parse(text, languages=['ru', 'en'])
+    if not dt_obj:
         update.message.reply_text(
-            "Не удалось распознать дату. Введите дату рождения любым понятным форматом, например '3 мая 1990' или '1990-05-03'."
+            'Не удалось распознать дату. Введите дату рождения любым понятным форматом, например "3 мая 1990" или "1990-05-03".'
         )
         return DATE
+    date_iso = dt_obj.strftime('%Y-%m-%d')
+    context.user_data['date'] = date_iso
+    update.message.reply_text(
+        'Отлично! Теперь выберите, когда вы родились: "ночью", "утром", "днем" или "вечером".'
+    )
+    return TIME_PERIOD
     context.user_data['date'] = date_iso
     update.message.reply_text(
         "Отлично! Теперь выберите, когда вы родились: 'ночью', 'утром', 'днем' или 'вечером'."
