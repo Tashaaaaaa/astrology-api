@@ -99,35 +99,64 @@ def date_handler(update: Update, context: CallbackContext):
 
 
 def time_period_handler(update: Update, context: CallbackContext):
+    # Предлагаем варианты времени через клавиатуру
+    keyboard = [["ночью", "утром", "днем", "вечером"]]
+    markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    update.message.reply_text(
+        "Когда вы родились? Выберите вариант:",
+        reply_markup=markup
+    )
+    return TIME_PERIOD
+
+# Обработка выбранного времени
+@dp.message_handler(Filters.text & ~Filters.command, state=TIME_PERIOD)
+def time_period_choice(update: Update, context: CallbackContext):
     choice = update.message.text.strip().lower()
     mapping = {'ночью': '00:00', 'утром': '08:00', 'днем': '13:00', 'вечером': '18:00'}
     if choice not in mapping:
-        update.message.reply_text("Выберите один из вариантов: 'ночью', 'утром', 'днем', 'вечером'.")
+        update.message.reply_text("Пожалуйста, выберите один из вариантов кнопок.")
         return TIME_PERIOD
     context.user_data['time'] = mapping[choice]
+    # Снимаем клавиатуру
     update.message.reply_text(
-        "Введите город рождения (например: Москва). Я сам определю координаты."
+        "Введите город рождения (например: Москва). Я сам определю координаты.",
+        reply_markup=ReplyKeyboardRemove()
     )
     return PLACE
 
 
 def place_handler(update: Update, context: CallbackContext):
     city = update.message.text.strip()
+    # Запрос к Nominatim с указанием русского языка и User-Agent
     try:
         r = requests.get(
             "https://nominatim.openstreetmap.org/search",
             params={"q": city, "format": "json", "limit": 1},
+            headers={"Accept-Language": "ru", "User-Agent": "astrology-bot/1.0"},
             timeout=5
         )
         data = r.json() if r.text else []
     except Exception:
         data = []
+    # Если город не найден, пробуем добавить страну Россия
     if not data:
-        update.message.reply_text("Не удалось найти город. Попробуйте ввести снова.")
+        try:
+            fallback = f"{city}, Russia"
+            r = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": fallback, "format": "json", "limit": 1},
+                headers={"Accept-Language": "en", "User-Agent": "astrology-bot/1.0"},
+                timeout=5
+            )
+            data = r.json() if r.text else []
+        except Exception:
+            data = []
+    if not data:
+        update.message.reply_text("Не удалось найти город Воронеж. Попробуйте ввести город и страну, например: 'Воронеж, Россия'.")
         return PLACE
     context.user_data['lat'] = float(data[0]['lat'])
     context.user_data['lon'] = float(data[0]['lon'])
-    context.user_data['place'] = city
+    context.user_data['place'] = data[0].get('display_name', city)
     update.message.reply_text("Выберите формат интерпретации: 'короткую' или 'красочную'.")
     return FORMAT
 
@@ -181,7 +210,8 @@ def cancel_handler(update: Update, context: CallbackContext):
 
 # Регистрация ConversationHandler
 conv = ConversationHandler(
-    entry_points=[MessageHandler(Filters.text & ~Filters.command, start_handler)],
+    allow_reentry=False,
+    conversation_timer=None  # Не перезапускать конверсацию автоматически
     states={
         DATE:        [MessageHandler(Filters.text & ~Filters.command, date_handler)],
         TIME_PERIOD: [MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
