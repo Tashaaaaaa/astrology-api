@@ -37,7 +37,7 @@ DATE, TIME_PERIOD, PLACE, FORMAT = range(4)
 
 # ─── Создаём Telegram Bot и Dispatcher ────────────────────────────────────────
 bot = Bot(token=TELEGRAM_TOKEN)
-dp  = Dispatcher(bot, None, workers=0, use_context=True)
+dp = Dispatcher(bot, None, workers=1, use_context=True)  # Установили хотя бы 1 рабочий поток для асинхронных колбеков
 
 # ─── REST API для натальной карты и ChatGPT ────────────────────────────────────
 @app.get("/natal")
@@ -187,6 +187,14 @@ async def telegram_webhook(req: Request):
 def health():
     return {'status': 'ok'}
 
-# Устанавливаем webhook при старте(WEBHOOK_URL)
+# Устанавливаем webhook при старте
+@app.on_event("startup")
+async def set_webhook():
+    logging.info(f"Setting Telegram webhook: {WEBHOOK_URL}")
+    # Удаляем старый webhook (на всякий случай)
+    bot.delete_webhook()
+    # Устанавливаем новый
+    bot.set_webhook(WEBHOOK_URL)
+    logging.info("Webhook setup complete.")
 
 # Запуск Uvicorn (бот и API в одном процессе) по CMD в Dockerfile
