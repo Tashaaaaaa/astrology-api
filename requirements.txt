@@ -4,4 +4,4 @@ flatlib
 swisseph
 openai
 python-telegram-bot
-
+requests
