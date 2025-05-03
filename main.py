@@ -1,8 +1,8 @@
 import os
 import logging
 import requests
-from fastapi import FastAPI, Request, Body
-from telegram import Update, Bot, ReplyKeyboardRemove
+from fastapi import FastAPI, Request
+from telegram import Update, Bot, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Dispatcher, CommandHandler, MessageHandler,
     Filters, CallbackContext, ConversationHandler
@@ -23,16 +23,20 @@ app = FastAPI()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_URL    = os.getenv("WEBHOOK_URL")
-API_URL        = os.getenv("API_URL", "http://127.0.0.1:10000")
-if not OPENAI_API_KEY or not TELEGRAM_TOKEN or not WEBHOOK_URL:
-    raise RuntimeError("Не заданы OPENAI_API_KEY, TELEGRAM_TOKEN или WEBHOOK_URL")
-openai.api_key = OPENAI_API_KEY
-swisseph.set_ephe_path('./ephe')
+# Базовый URL для собственного API: либо задаётся, либо выводится из WEBHOOK_URL
+API_URL = os.getenv("API_URL")
+if not API_URL and WEBHOOK_URL:
+    API_URL = WEBHOOK_URL.rstrip('/webhook')
+if not OPENAI_API_KEY or not TELEGRAM_TOKEN or not WEBHOOK_URL or not API_URL:
+    raise RuntimeError("Нужно задать OPENAI_API_KEY, TELEGRAM_TOKEN, WEBHOOK_URL и API_URL в окружении")
 
-# ─── Состояния диалога ─────────────────────────────────────────────────────────
+openai.api_key = OPENAI_API_KEY
+swisseph.set_ephe_path('./ephe')  # Swiss Ephemeris path
+
+# ─── Состояния ───────────────────────────────────────────────────────────────
 DATE, TIME, PLACE, FORMAT = range(4)
 
-# ─── Инициализация Telegram Bot и Dispatcher ───────────────────────────────────
+# ─── Telegram Bot и Dispatcher ─────────────────────────────────────────────────
 bot = Bot(TELEGRAM_TOKEN)
 dp  = Dispatcher(bot, None, workers=1, use_context=True)
 
@@ -46,12 +50,12 @@ def parse_time(text: str):
     return dt.time().strftime('%H:%M') if dt else None
 
 def geocode_city(city: str):
-    for lang, suffix in [("ru",""),("en",", Russia")]:
+    for lang, suffix in [("ru", ""), ("en", ", Russia")]:
         try:
             r = requests.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"q": city+suffix, "format":"json", "limit":1},
-                headers={"Accept-Language":lang, "User-Agent":"astro-bot/1.0"},
+                params={"q": city + suffix, "format": "json", "limit": 1},
+                headers={"Accept-Language": lang, "User-Agent": "astrology-bot/1.0"},
                 timeout=5
             )
             arr = r.json() if r.text else []
@@ -62,27 +66,24 @@ def geocode_city(city: str):
             return float(d['lat']), float(d['lon']), d.get('display_name', city)
     return None
 
-# ─── Safe API calls ────────────────────────────────────────────────────────────
-def safe_get(url, **kwargs):
+# Safe wrapper для запросов к API собственного сервиса
+def safe_get_natal(date, time, lat, lon, tz='+00:00'):
     try:
-        r = requests.get(url, **kwargs, timeout=5)
-        return r.json() if r.text else None
-    except:
-        return {'error':'Сервис недоступен'}
+        r = requests.get(
+            f"{API_URL}/natal",
+            params={'date': date, 'time': time, 'lat': lat, 'lon': lon, 'tz': tz},
+            timeout=5
+        )
+        return r.json() if r.status_code == 200 and r.text else {'error': f'HTTP {r.status_code}'}
+    except Exception as e:
+        return {'error': 'Сервис недоступен'}
 
-def safe_post(url, **kwargs):
-    try:
-        r = requests.post(url, **kwargs, timeout=10)
-        return r.json() if r.text else None
-    except:
-        return None
-
-# ─── Handlers диалога ─────────────────────────────────────────────────────────
+# ─── Handlers ─────────────────────────────────────────────────────────────────
 
 def start_handler(update: Update, context: CallbackContext):
     update.message.reply_text(
-        "👋 Привет! Давай создадим твою натальную карту.\n"
-        "Шаг 1: Введите дату рождения, например '3 мая 1990' или '1990-05-03'."
+        "👋 Привет! Создаем натальную карту.\n"
+        "Шаг 1/4: Введите дату рождения, например '3 мая 1990'."
     )
     return DATE
 
@@ -90,72 +91,66 @@ def start_handler(update: Update, context: CallbackContext):
 def date_handler(update: Update, context: CallbackContext):
     iso = parse_date(update.message.text)
     if not iso:
-        update.message.reply_text("Не распознал дату. Попробуйте снова, например '3 мая 1990'.")
+        update.message.reply_text("Не понял дату. Попробуйте '3 мая 1990'.")
         return DATE
     context.user_data['date'] = iso
-    update.message.reply_text("Шаг 2: Введите время рождения в формате 'HH:MM', например '14:30'.")
+    update.message.reply_text("Шаг 2/4: Введите время рождения 'HH:MM', например '14:30'.")
     return TIME
 
 
 def time_handler(update: Update, context: CallbackContext):
     tm = parse_time(update.message.text)
     if not tm:
-        update.message.reply_text("Не распознал время. Попробуйте, например '14:30'.")
+        update.message.reply_text("Не понял время. Попробуйте '14:30'.")
         return TIME
     context.user_data['time'] = tm
-    update.message.reply_text("Шаг 3: Введите город рождения, например 'Москва'.")
+    update.message.reply_text("Шаг 3/4: Введите город рождения, например 'Москва'.")
     return PLACE
 
 
 def place_handler(update: Update, context: CallbackContext):
-    city = update.message.text.strip()
-    coords = geocode_city(city)
-    if not coords:
-        update.message.reply_text("Не нашёл город. Попробуйте 'Воронеж, Россия'.")
+    res = geocode_city(update.message.text)
+    if not res:
+        update.message.reply_text("Город не найден. Попробуйте 'Воронеж, Россия'.")
         return PLACE
-    lat, lon, display = coords
-    context.user_data.update({'lat':lat,'lon':lon,'place':display})
-    update.message.reply_text("Шаг 4: Выберите формат интерпретации: 'короткую' или 'красочную'.")
+    context.user_data['lat'], context.user_data['lon'], context.user_data['place'] = res
+    update.message.reply_text("Шаг 4/4: 'короткую' или 'красочную' интерпретацию? Напишите слово.")
     return FORMAT
 
 
 def format_handler(update: Update, context: CallbackContext):
     choice = update.message.text.lower()
-    if choice not in ['короткую','красочную']:
-        update.message.reply_text("Пожалуйста, 'короткую' или 'красочную'.")
+    if choice not in ['короткую', 'красочную']:
+        update.message.reply_text("Введите 'короткую' или 'красочную'.")
         return FORMAT
     data = context.user_data
-    # Получаем натальную карту
-    resp = safe_get(
-        f"{API_URL}/natal",
-        params={
-            'date': data['date'], 'time': data['time'],
-            'lat': data['lat'], 'lon': data['lon'], 'tz': '+00:00'
-        }
-    ) or {}
+    resp = safe_get_natal(data['date'], data['time'], data['lat'], data['lon'])
     if 'error' in resp:
         update.message.reply_text(f"Ошибка расчёта: {resp['error']}")
         return ConversationHandler.END
     sun, moon, asc = resp['sun_sign'], resp['moon_sign'], resp['ascendant_sign']
     if choice == 'короткую':
-        text = f"{data['place']}: ☀️ {sun}, 🌙 {moon}, ASC {asc}."
+        text = f"{data['place']}: ☀️{sun}, 🌙{moon}, ASC{asc}."
     else:
         prompt = (
-            f"Опиши натальную карту для человека из {data['place']} "
-            f"({data['date']} {data['time']}), Солнце в {sun}, Луна в {moon}, ASC {asc}."
-            " Дай красочное подробное описание."
+            f"Натальная карта для {data['place']} ({data['date']} {data['time']}): "
+            f"Солнце в {sun}, Луна в {moon}, Асцендент в {asc}. "
+            "Подробное красочное описание."
         )
-        cg = safe_post(f"{API_URL}/chat", json={'prompt':prompt}) or {}
-        text = cg.get('reply', 'Ошибка GPT.')
+        try:
+            cg = requests.post(f"{API_URL}/chat", json={'prompt': prompt}, timeout=10).json()
+            text = cg.get('reply', 'Ошибка GPT')
+        except:
+            text = 'Ошибка GPT'
     update.message.reply_text(text)
     return ConversationHandler.END
 
 
 def cancel_handler(update: Update, context: CallbackContext):
-    update.message.reply_text("Диалог прерван пользователем.")
+    update.message.reply_text("Отменено.")
     return ConversationHandler.END
 
-# ─── Регистрация ConversationHandler ─────────────────────────────────────────
+# ─── Регистрация разговорного хендлера ─────────────────────────────────────────
 conv = ConversationHandler(
     entry_points=[CommandHandler('start', start_handler)],
     states={
@@ -167,16 +162,17 @@ conv = ConversationHandler(
     fallbacks=[CommandHandler('cancel', cancel_handler)],
     allow_reentry=False
 )
+
 dp.add_handler(conv)
 
-# ─── Webhook и healthcheck ──────────────────────────────────────────────────
+# ─── Webhook и Health ─────────────────────────────────────────────────────────
 @app.post('/webhook')
 async def telegram_webhook(req: Request):
     try:
-        upd = await req.json()
+        data = await req.json()
     except:
         return {'ok': True}
-    dp.process_update(Update.de_json(upd, bot))
+    dp.process_update(Update.de_json(data, bot))
     return {'ok': True}
 
 @app.get('/')
@@ -184,8 +180,8 @@ def health():
     return {'status': 'ok'}
 
 @app.on_event('startup')
-async def set_webhook():
-    logging.info(f"Устанавливаем webhook: {WEBHOOK_URL}")
+async def on_startup():
+    logging.info(f"Setting webhook to {WEBHOOK_URL}")
     bot.delete_webhook()
     bot.set_webhook(WEBHOOK_URL)
-    logging.info("Webhook установлен.")
+    logging.info("Webhook set.")
