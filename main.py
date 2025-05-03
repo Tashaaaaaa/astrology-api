@@ -3,12 +3,10 @@ from flatlib.chart import Chart
 from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 import swisseph
-from flatlib import ephem
 import logging
 
-# Подключение эфемерид Swiss Ephemeris
+# Устанавливаем путь к эфемеридам
 swisseph.set_ephe_path('./ephe')
-ephem.use(swisseph)
 
 app = FastAPI()
 
