@@ -153,31 +153,40 @@ def cancel_handler(update: Update, context: CallbackContext):
     update.message.reply_text("Отменено пользователем.")
     return ConversationHandler.END
 
-# Регистрируем ConversationHandler на dispatcher
+# Регистрируем ConversationHandler
+# Запуск разговора по любому текстовому сообщению (не требует /start)
 conv = ConversationHandler(
-    entry_points=[CommandHandler('start', start_handler)],
+    entry_points=[MessageHandler(Filters.text & ~Filters.command, start_handler)],
     states={
-        DATE:         [MessageHandler(Filters.text & ~Filters.command, date_handler)],
-        TIME_PERIOD: [MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
-        PLACE:        [MessageHandler(Filters.text & ~Filters.command, place_handler)],
-        FORMAT:       [MessageHandler(Filters.text & ~Filters.command, format_handler)],
+        DATE:        [MessageHandler(Filters.text & ~Filters.command, date_handler)],
+        TIME_PERIOD:[MessageHandler(Filters.text & ~Filters.command, time_period_handler)],
+        PLACE:       [MessageHandler(Filters.text & ~Filters.command, place_handler)],
+        FORMAT:      [MessageHandler(Filters.text & ~Filters.command, format_handler)],
     },
     fallbacks=[CommandHandler('cancel', cancel_handler)]
 )
+# Убираем CommandHandler('start') — любой текст запускает Conversation
+# Добавляем ConversationHandler на Dispatcher
+
 dp.add_handler(conv)
 
-# Webhook endpoint для Telegram
+# Webhook endpoint для Telegram для Telegram
 @app.post('/webhook')
 async def telegram_webhook(req: Request):
-    update = Update.de_json(await req.json(), bot)
+    # Защита от не-JSON запросов (health checks и др.)
+    try:
+        payload = await req.json()
+    except Exception:
+        return {'ok': True}
+    update = Update.de_json(payload, bot)
     dp.process_update(update)
     return {'ok': True}
 
-# Устанавливаем webhook при старте
-@app.on_event('startup')
-def on_startup():
-    logging.info('Setting Telegram webhook…')
-    bot.delete_webhook()
-    bot.set_webhook(WEBHOOK_URL)
+# Health check endpoint
+@app.get('/')
+def health():
+    return {'status': 'ok'}
+
+# Устанавливаем webhook при старте(WEBHOOK_URL)
 
 # Запуск Uvicorn (бот и API в одном процессе) по CMD в Dockerfile
