@@ -2,13 +2,13 @@ from fastapi import FastAPI, Query
 from flatlib.chart import Chart
 from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
-from flatlib.ephem import swe
+import swisseph
 from flatlib import ephem
 import logging
 
 # Подключение эфемерид Swiss Ephemeris
-swe.set_ephe_path('./ephe')
-ephem.use(swe)
+swisseph.set_ephe_path('./ephe')
+ephem.use(swisseph)
 
 app = FastAPI()
 
