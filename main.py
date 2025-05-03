@@ -6,11 +6,9 @@ from flatlib.ephem import swe
 from flatlib import ephem
 import logging
 
-# Инициализация эфемерид
+# Подключение эфемерид Swiss Ephemeris
 swe.set_ephe_path('./ephe')
-ephem.use(swe)  # <--- вот это ключевое!
-
-
+ephem.use(swe)
 
 app = FastAPI()
 
