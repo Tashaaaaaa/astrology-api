@@ -8,6 +8,8 @@ from telegram.ext import (
     Dispatcher, CommandHandler, MessageHandler,
     Filters, CallbackContext, ConversationHandler
 )
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+
 from flatlib import const
 from flatlib.chart import Chart
 from flatlib.datetime import Datetime
