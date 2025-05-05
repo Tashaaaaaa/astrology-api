@@ -7,6 +7,7 @@ from telegram.ext import (
     Dispatcher, CommandHandler, MessageHandler,
     Filters, CallbackContext, ConversationHandler
 )
+from fastapi import HTTPException
 from flatlib import const
 from flatlib.chart import Chart
 from flatlib.datetime import Datetime
@@ -14,6 +15,7 @@ from flatlib.geopos import GeoPos
 import swisseph
 import openai
 import dateparser  # гибкий парсинг дат и времени
+import pytz
 
 # ─── Настройка приложения ─────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
